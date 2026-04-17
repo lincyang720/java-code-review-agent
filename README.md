@@ -1,22 +1,23 @@
 # Java Code Review Agent
 
-基于 **Spring AI + LangChain4j** 的智能代码审查 Agent，支持 GitHub/GitLab Webhook 集成，自动对 Pull Request / Merge Request 进行代码审查。
+基于 **Spring Boot 3.2 + LangChain4j + DeepSeek** 的智能代码审查 Agent，支持 GitHub/GitLab Webhook 集成，自动对 Pull Request / Merge Request 进行多层次代码审查，并通过 WebSocket 实时推送审查进度。
 
-## 🎯 功能特性
+## 功能特性
 
 | 功能 | 说明 |
 |:---|:---|
-| **自动 PR 审查** | 接收 Webhook 事件，自动触发代码审查 |
-| **Bug 检测** | 空指针、并发安全、资源泄漏、SQL 注入 |
-| **代码质量** | 重复代码、圈复杂度、命名规范、代码风格 |
-| **安全扫描** | XSS、SQL 注入、反序列化、敏感信息泄露 |
-| **双 AI 框架** | Spring AI + LangChain4j，灵活选择 |
-| **本地规则** | 基于 JavaParser 的静态分析，零成本 |
-| **智能降级** | 本地发现问题多时跳过 AI，节省成本 |
-| **阿里巴巴规范** | 集成 P3C-PMD，真正的阿里巴巴 Java 开发规范 |
-| **多渠道检测** | 可选集成 SonarQube、SpotBugs，无需安装默认可用 |
+| **自动 PR 审查** | 接收 Webhook 事件，自动触发代码审查并回写评论 |
+| **阿里巴巴 P3C 规范** | 集成 P3C-PMD，覆盖命名、并发、集合、注释等 50+ 条规则 |
+| **安全漏洞扫描** | 检测 SQL 注入、XSS、硬编码密钥、弱加密等 OWASP Top 10 |
+| **Bug 检测** | 空指针、并发安全、资源泄漏、线程不安全用法 |
+| **AI 深度审查** | DeepSeek LLM 汇总分析，生成结构化、建设性的审查报告 |
+| **实时进度推送** | WebSocket 实时推送审查阶段（扫描中 → AI 分析 → 报告生成） |
+| **多格式报告导出** | 支持 HTML、Markdown、JSON、PDF 格式导出 |
+| **审查历史管理** | 项目维度的审查历史、质量趋势、统计看板 |
+| **可选外部工具** | 可选集成 SonarQube、SpotBugs，不启用不影响核心功能 |
+| **智能降级** | 本地发现问题超过阈值时自动跳过 AI，节省 Token 成本 |
 
-## 📊 效果对比
+## 效果对比
 
 ```
 使用前（纯人工审查）：
@@ -33,19 +34,19 @@
 效率提升：审查时间减少 75%
 ```
 
-## 🚀 快速开始
+## 快速开始
 
 ### 1. 环境要求
 
 - Java 17+
 - Maven 3.8+
-- OpenAI API Key
-- GitLab/GitHub Token
+- DeepSeek / OpenAI API Key
+- GitLab 或 GitHub Token
 
 ### 2. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/java-code-review-agent.git
+git clone https://github.com/lincyang720/java-code-review-agent.git
 cd java-code-review-agent
 ```
 
@@ -56,22 +57,24 @@ cp .env.example .env
 # 编辑 .env 文件，填写你的 API Key
 ```
 
-`.env` 文件内容：
+`.env` 文件内容示例：
 
 ```env
 # DeepSeek 配置（推荐，国内访问，性价比高）
 DEEPSEEK_API_KEY=your_deepseek_api_key
 DEEPSEEK_MODEL=deepseek-chat
 
-# GitLab 配置（公司内网）
-GITLAB_URL=http://192.168.1.151
+# GitLab 配置
+GITLAB_URL=http://your-gitlab-host
 GITLAB_TOKEN=your_gitlab_token
+GITLAB_WEBHOOK_TOKEN=your_webhook_secret
 
 # GitHub 配置
 GITHUB_TOKEN=your_github_token
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
 ```
 
-> 💡 **提示**：项目默认使用 DeepSeek API（国内访问，性价比高）。如需使用 OpenAI，请配置 `OPENAI_API_KEY` 并修改 `DEEPSEEK_BASE_URL`。
+> **提示**：项目默认使用 DeepSeek API（国内访问，性价比高）。如需使用 OpenAI，设置 `DEEPSEEK_BASE_URL=https://api.openai.com/v1` 和 `OPENAI_API_KEY` 即可。
 
 ### 4. 构建运行
 
@@ -88,10 +91,6 @@ java -jar target/java-code-review-agent-1.0.0.jar
 **方式二：Docker 运行**
 
 ```bash
-# 构建镜像
-docker-compose build
-
-# 启动服务
 docker-compose up -d
 ```
 
@@ -99,275 +98,365 @@ docker-compose up -d
 
 **GitLab 配置：**
 
-1. 进入项目 -> Settings -> Webhooks
+1. 进入项目 → Settings → Webhooks
 2. URL: `http://your-server:8080/webhook/gitlab`
-3. Secret Token: （可选，用于验证）
+3. Secret Token: 填写 `GITLAB_WEBHOOK_TOKEN`
 4. 触发事件：勾选 "Merge request events"
-5. 保存
 
 **GitHub 配置：**
 
-1. 进入项目 -> Settings -> Webhooks
+1. 进入项目 → Settings → Webhooks
 2. Payload URL: `http://your-server:8080/webhook/github`
 3. Content type: `application/json`
-4. 触发事件：选择 "Pull requests"
-5. 保存
+4. Secret: 填写 `GITHUB_WEBHOOK_SECRET`
+5. 触发事件：选择 "Pull requests"
 
-## 📁 项目结构
+## 项目结构
 
 ```
 java-code-review-agent/
-├── pom.xml                          # Maven 配置
-├── Dockerfile                       # Docker 镜像
-├── docker-compose.yml               # Docker Compose 配置
-├── .env.example                     # 环境变量示例
-├── README.md                        # 项目说明
+├── pom.xml
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
 │
-├── src/
-│   ├── main/
-│   │   ├── java/com/aicode/review/
-│   │   │   ├── Application.java           # 启动类
-│   │   │   ├── config/
-│   │   │   │   ├── SpringAIConfig.java    # Spring AI 配置
-│   │   │   │   └── LangChain4jConfig.java # LangChain4j 配置
-│   │   │   ├── controller/
-│   │   │   │   └── WebhookController.java # Webhook 接收
-│   │   │   ├── service/
-│   │   │   │   ├── CodeReviewService.java # 审查服务
-│   │   │   │   ├── GitService.java        # Git 服务
-│   │   │   │   └── PromptService.java     # 提示词服务
-│   │   │   ├── agent/
-│   │   │   │   ├── ReviewAgent.java       # AI Agent
-│   │   │   │   ├── ReviewTools.java       # 工具定义
-│   │   │   │   └── ReviewMemory.java      # 记忆管理
-│   │   │   ├── model/
-│   │   │   │   ├── Issue.java             # 问题模型
-│   │   │   │   ├── ReviewReport.java      # 审查报告
-│   │   │   │   ├── PRDifferences.java     # PR 差异
-│   │   │   │   └── CommitMessage.java     # 提交信息
-│   │   │   ├── client/
-│   │   │   │   ├── GitHubClient.java      # GitHub API
-│   │   │   │   └── GitLabClient.java      # GitLab API
-│   │   │   └── util/
-│   │   │       └── CodeParser.java        # 代码解析
-│   │   │
-│   │   └── resources/
-│   │       ├── application.yml            # 应用配置
-│   │       └── prompts/
-│   │           └── review-prompt.txt      # 审查提示词
-│   │
-│   └── test/
-│       └── java/com/aicode/review/
-│           └── CodeReviewServiceTest.java # 单元测试
+└── src/main/
+    ├── java/com/aicode/review/
+    │   ├── Application.java
+    │   ├── agent/
+    │   │   ├── ReviewAgent.java          # AI 审查核心，整合多层检测
+    │   │   ├── ReviewTools.java          # JavaParser 静态分析工具
+    │   │   └── ReviewMemory.java         # 审查上下文记忆
+    │   ├── config/
+    │   │   ├── LangChain4jConfig.java    # LLM 模型配置
+    │   │   ├── WebSocketConfig.java      # WebSocket 端点配置
+    │   │   ├── ReviewProgressWebSocketHandler.java  # 实时进度推送
+    │   │   ├── StaticAnalysisConfig.java
+    │   │   └── DotEnvConfig.java         # .env 文件加载
+    │   ├── controller/
+    │   │   ├── WebhookController.java    # Webhook 接收
+    │   │   ├── ReviewController.java     # 审查任务与报告接口
+    │   │   └── DashboardController.java  # 看板数据接口
+    │   ├── service/
+    │   │   ├── CodeReviewService.java    # 审查流程编排
+    │   │   ├── GitService.java           # GitHub/GitLab API 封装
+    │   │   ├── PromptService.java        # 提示词加载与解析
+    │   │   ├── P3CAnalysisService.java   # 阿里 P3C 规范检测
+    │   │   ├── ReviewHistoryService.java # 审查历史与统计
+    │   │   ├── ReviewProgressService.java # 进度消息管理
+    │   │   └── ReportExportService.java  # 多格式报告导出
+    │   ├── client/
+    │   │   ├── GitHubClient.java
+    │   │   ├── GitLabClient.java
+    │   │   ├── SonarQubeClient.java      # 可选
+    │   │   └── SpotBugsRunner.java       # 可选
+    │   ├── model/
+    │   │   ├── ReviewReport.java
+    │   │   ├── Issue.java
+    │   │   ├── PRInfo.java
+    │   │   ├── PRDifferences.java
+    │   │   ├── CommitMessage.java
+    │   │   ├── ReviewHistory.java
+    │   │   ├── ProjectStats.java
+    │   │   └── ReviewProgressMessage.java
+    │   └── util/
+    │       └── CodeParser.java
+    │
+    └── resources/
+        ├── application.yml
+        ├── application-dev.yml
+        ├── prompts/
+        │   ├── review-prompt.txt         # AI 审查提示词模板
+        │   └── commit-prompt.txt         # 提交信息提示词模板
+        └── static/
+            ├── review-dashboard.html     # 审查任务看板
+            └── admin-dashboard.html      # 管理后台
 ```
 
-## 🔧 配置说明
+## 多层检测架构
 
-### application.yml
+```
+┌──────────────────────────────────────────────────┐
+│                  代码审查流程                      │
+├──────────────────────────────────────────────────┤
+│  第一层：P3C 阿里巴巴规范（PMD）                   │
+│  ├── 命名规范（类名、方法名、变量名）               │
+│  ├── 并发处理（线程池、SimpleDateFormat）           │
+│  ├── 集合处理（List/Map/Set 规范）                 │
+│  ├── 控制语句（大括号、行宽）                      │
+│  └── 注释规约（类注释、方法注释）                  │
+│                                                  │
+│  第二层：自定义规则检测（JavaParser + 正则）        │
+│  ├── 空指针检测                                   │
+│  ├── 并发安全（线程不安全集合、共享状态）            │
+│  ├── 安全漏洞（OWASP Top 10）                     │
+│  │   ├── SQL 注入、XSS、路径遍历                  │
+│  │   ├── 硬编码密钥、弱加密算法（MD5/SHA1）         │
+│  │   ├── 不安全反序列化、命令注入                  │
+│  │   └── printStackTrace 日志暴露                │
+│  └── 资源泄漏（未关闭的流/连接）                   │
+│                                                  │
+│  第三层：AI 深度分析（DeepSeek LLM）               │
+│  ├── 汇总本地检测结果                             │
+│  ├── 业务逻辑 Bug 与设计问题                      │
+│  └── 生成结构化、建设性的 Markdown 报告            │
+│                                                  │
+│  第四层：可选外部工具（需手动启用）                 │
+│  ├── SonarQube（企业级质量分析）                  │
+│  └── SpotBugs（字节码级 Bug 检测）                │
+└──────────────────────────────────────────────────┘
+```
+
+## API 接口
+
+### Webhook 接口
+
+| 接口 | 说明 |
+|:---|:---|
+| `POST /webhook/github` | 接收 GitHub Pull Request 事件 |
+| `POST /webhook/gitlab` | 接收 GitLab Merge Request 事件 |
+| `POST /webhook/manual-review` | 手动提交代码片段审查 |
+| `GET /webhook/health` | 服务健康检查 |
+| `GET /webhook/test-gitlab` | 测试 GitLab 连通性 |
+| `GET /webhook/review-branch` | 手动触发分支审查 |
+
+### 审查任务接口
+
+| 接口 | 说明 |
+|:---|:---|
+| `POST /api/review/branch` | 异步启动分支审查，返回 taskId |
+| `GET /api/review/{taskId}/status` | 查询任务状态（运行中/完成/未找到） |
+| `GET /api/review/{taskId}/report` | 获取审查报告 JSON |
+| `GET /api/reports/{taskId}/export?format=` | 导出报告（html/json/markdown/pdf） |
+| `GET /api/reports/{taskId}/view` | 浏览器预览 HTML 报告 |
+| `GET /api/reports` | 列出所有报告摘要 |
+| `DELETE /api/reports/{taskId}` | 清除报告缓存 |
+
+### 看板数据接口
+
+| 接口 | 说明 |
+|:---|:---|
+| `GET /api/dashboard/stats` | 全局统计（总审查数、问题数、质量分等） |
+| `GET /api/dashboard/projects` | 所有项目列表 |
+| `GET /api/dashboard/projects/{projectId}` | 项目详情及近期审查 |
+| `GET /api/dashboard/history/recent` | 最近审查记录 |
+| `GET /api/dashboard/trends` | 近 7 天审查趋势数据 |
+| `DELETE /api/dashboard/history/{historyId}` | 删除历史记录 |
+
+### WebSocket 实时进度
+
+连接 `ws://your-server:8080/ws/review-progress`，连接后发送：
+
+```json
+{ "taskId": "your-task-id" }
+```
+
+服务端会实时推送：
+
+```json
+{ "taskId": "xxx", "type": "PROGRESS", "message": "正在进行 P3C 规范检测...", "progress": 30 }
+{ "taskId": "xxx", "type": "PROGRESS", "message": "AI 深度分析中...", "progress": 70 }
+{ "taskId": "xxx", "type": "COMPLETE", "message": "审查完成", "progress": 100 }
+```
+
+> **提示**：若客户端连接晚于任务启动，服务端会缓存最多 100 条进度消息（保留 5 分钟），连接后自动补发。
+
+## 手动触发示例
+
+**触发分支审查：**
+
+```bash
+curl -X POST "http://localhost:8080/api/review/branch" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId": "my-project", "branch": "feature/xxx"}'
+```
+
+**手动提交代码片段审查：**
+
+```bash
+curl -X POST "http://localhost:8080/webhook/manual-review" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "public class Test { ... }",
+    "context": "用户登录模块",
+    "repository": "my-org/my-repo",
+    "prId": "42"
+  }'
+```
+
+**导出报告：**
+
+```bash
+# 导出 Markdown
+curl "http://localhost:8080/api/reports/{taskId}/export?format=markdown" -o report.md
+
+# 导出 PDF
+curl "http://localhost:8080/api/reports/{taskId}/export?format=pdf" -o report.pdf
+```
+
+## 配置说明
+
+### application.yml 核心配置
 
 ```yaml
-spring:
-  ai:
-    openai:
-      api-key: ${OPENAI_API_KEY}
-      model: gpt-4o-mini
-
 langchain4j:
   open-ai:
-    api-key: ${OPENAI_API_KEY}
-    model-name: gpt-4o-mini
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
+    api-key: ${DEEPSEEK_API_KEY}
+    model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+    temperature: 0.1
+    timeout: 60
 
 app:
   gitlab:
-    url: http://192.168.1.151
-    token: ${GITLAB_TOKEN}
-  
-  # 静态代码分析工具配置（可选）
+    url: ${GITLAB_URL:}
+    token: ${GITLAB_TOKEN:}
+  github:
+    token: ${GITHUB_TOKEN:}
+
+  review:
+    enable-ai: true                  # 是否开启 AI 分析
+    local-issue-threshold: 10        # 本地问题超过此数量跳过 AI
+    max-code-length: 50000           # 单次审查代码最大长度
+    post-comments: true              # 是否将结果回写到 PR/MR 评论
+
   analysis:
-    # 本地规则检测（阿里巴巴规范、OWASP 安全规则）- 始终启用
     local-rules-enabled: true
-    # AI 深度分析
     ai-analysis-enabled: true
-    # SonarQube 配置（可选，需要本地服务）
     sonarqube:
-      enabled: false  # 默认禁用，如需使用请改为 true
+      enabled: false                 # 默认禁用
       url: http://localhost:9000
       token: ${SONAR_TOKEN:}
       project-key: ${SONAR_PROJECT_KEY:}
-    # SpotBugs 配置（可选，需要本地安装）
     spotbugs:
-      enabled: false  # 默认禁用，如需使用请改为 true
-      executable-path: spotbugs  # 或指定完整路径如 /usr/local/bin/spotbugs
-      effort: default  # min, default, max
-      threshold: medium  # high, medium, low, experimental
+      enabled: false                 # 默认禁用
+      executable-path: spotbugs
+      effort: default                # min / default / max
+      threshold: medium              # high / medium / low
 ```
 
 ### 环境变量
 
 | 变量 | 说明 | 必需 |
-|:---|:---|:---|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（推荐） | ✅ |
-| `DEEPSEEK_MODEL` | 模型名称，默认 deepseek-chat | ❌ |
-| `DEEPSEEK_BASE_URL` | API 地址，默认 https://api.deepseek.com/v1 | ❌ |
-| `OPENAI_API_KEY` | OpenAI API 密钥（可选，需代理） | ❌ |
-| `GITLAB_URL` | GitLab 地址 | ❌ |
-| `GITLAB_TOKEN` | GitLab Token | ✅ |
-| `GITHUB_TOKEN` | GitHub Token | ❌ |
-| `SONAR_TOKEN` | SonarQube Token（可选） | ❌ |
-| `SONAR_PROJECT_KEY` | SonarQube 项目 Key（可选） | ❌ |
+|:---|:---|:---:|
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | ✅ |
+| `DEEPSEEK_BASE_URL` | API 地址，默认 `https://api.deepseek.com/v1` | |
+| `DEEPSEEK_MODEL` | 模型名称，默认 `deepseek-chat` | |
+| `OPENAI_API_KEY` | OpenAI API 密钥（可选替代 DeepSeek） | |
+| `GITLAB_URL` | GitLab 服务地址 | |
+| `GITLAB_TOKEN` | GitLab API Token | ✅ |
+| `GITLAB_WEBHOOK_TOKEN` | GitLab Webhook 验证 Token | |
+| `GITHUB_TOKEN` | GitHub API Token | |
+| `GITHUB_WEBHOOK_SECRET` | GitHub Webhook HMAC 签名密钥 | |
+| `SONAR_TOKEN` | SonarQube Token（可选） | |
+| `SONAR_PROJECT_KEY` | SonarQube 项目 Key（可选） | |
 
-> 💡 **AI 模型配置说明**：
-> - 默认使用 **DeepSeek**（国内访问，性价比高）
-> - 如需切换 OpenAI，设置 `DEEPSEEK_BASE_URL=https://api.openai.com/v1` 和 `OPENAI_API_KEY`
-
-## 🧪 测试
+### 切换 AI 模型
 
 ```bash
-# 运行单元测试
+# 使用 OpenAI
+export DEEPSEEK_BASE_URL=https://api.openai.com/v1
+export OPENAI_API_KEY=sk-xxx
+
+# 使用其他兼容 OpenAI 接口的服务（如 Qwen、Yi）
+export DEEPSEEK_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+export DEEPSEEK_API_KEY=your_qwen_key
+export DEEPSEEK_MODEL=qwen-coder-plus
+```
+
+### 启用可选外部工具
+
+**SonarQube：**
+
+```yaml
+# application.yml
+app:
+  analysis:
+    sonarqube:
+      enabled: true
+      url: http://localhost:9000
+      token: ${SONAR_TOKEN}
+      project-key: ${SONAR_PROJECT_KEY}
+```
+
+**SpotBugs：**
+
+```yaml
+app:
+  analysis:
+    spotbugs:
+      enabled: true
+      executable-path: /usr/local/bin/spotbugs
+      effort: max
+      threshold: low
+```
+
+## 技术栈
+
+| 组件 | 版本 | 用途 |
+|:---|:---|:---|
+| Spring Boot | 3.2 | 应用框架 |
+| LangChain4j | 0.35.0 | LLM 集成与 Agent 框架 |
+| DeepSeek | - | AI 代码审查（默认） |
+| Alibaba P3C-PMD | - | 阿里巴巴 Java 规范检测 |
+| JavaParser | - | 本地静态代码分析 |
+| Spring WebFlux | - | 异步 HTTP 客户端（WebClient） |
+| WebSocket | - | 实时进度推送 |
+| Java | 17 | 运行环境 |
+| Maven | 3.8+ | 构建工具 |
+| Docker | - | 容器化部署 |
+
+## 测试
+
+```bash
+# 运行全部测试
 mvn test
 
-# 测试 GitLab 连接
+# 运行单个测试类
+mvn test -Dtest=CodeReviewTest
+
+# 测试 GitLab 连通性
 mvn test -Dtest=CodeReviewServiceTest#testGitLabConnection
 ```
 
-## 📡 API 接口
+## 常见问题
 
-### Webhook 接收
+**Q: Token 费用过高**
 
-```
-POST /webhook/gitlab    # GitLab Webhook
-POST /webhook/github    # GitHub Webhook
-```
+本地规则会优先过滤问题，当发现问题数超过 `local-issue-threshold`（默认 10）时自动跳过 AI 调用。也可以切换至更便宜的模型如 `deepseek-chat`。
 
-### 健康检查
+**Q: 审查结果不准确**
 
-```
-GET /webhook/health
-```
+优化 `src/main/resources/prompts/review-prompt.txt` 中的 Few-shot 示例，或在提示词中添加项目特定的规范说明，并调低 `temperature` 参数。
 
-### 手动审查（测试用）
+**Q: 无法连接内网 GitLab**
 
-```bash
-curl -X POST http://localhost:8080/webhook/manual-review \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "public class Test { ... }",
-    "context": "测试代码",
-    "repository": "test/repo",
-    "prId": "1"
-  }'
-```
+检查 `GITLAB_URL` 配置和网络连通性：`curl http://your-gitlab-host`。GitLab Token 需要 `api` 权限。使用 Docker 时需检查容器网络配置。
 
-## 🐛 常见问题
+**Q: WebSocket 进度消息收不到**
 
-### 1. Token 费用过高
+日志中 `当前会话数: 0` 表示客户端尚未连接。确保在任务启动前或启动后 5 分钟内完成 WebSocket 连接并发送 `taskId` 绑定消息。
 
-**问题：** LLM 调用成本太高
+**Q: SonarQube / SpotBugs 不生效**
 
-**解决方案：**
-- 本地规则先过滤，减少 AI 调用
-- 使用 gpt-4o-mini 替代 GPT-4
-- 设置 `app.review.local-issue-threshold=10`
+这两个工具默认禁用。需在 `application.yml` 中将对应的 `enabled` 改为 `true`，并确保服务已安装/运行。
 
-### 2. 审查结果不准确
-
-**问题：** AI 给的审查意见太宽泛
-
-**解决方案：**
-- 优化 `review-prompt.txt` 中的 Few-shot 示例
-- 在提示词中添加项目特定的规范
-- 调整 temperature 参数（更低更确定）
-
-### 3. 无法连接公司 GitLab
-
-**问题：** 内网 GitLab 连接失败
-
-**解决方案：**
-- 检查网络连通性：`curl http://192.168.1.151`
-- 确认 GitLab Token 权限（需要 api 权限）
-- 如果使用 Docker，检查容器网络配置
-
-### 4. SonarQube/SpotBugs 如何启用
-
-**问题：** 想使用 SonarQube 或 SpotBugs 进行额外的代码检测
-
-**解决方案：**
-
-**SonarQube（需要本地服务）：**
-1. 本地安装 SonarQube 服务（Docker 方式最简单）
-2. 在 `application.yml` 中启用：`app.analysis.sonarqube.enabled: true`
-3. 配置 SonarQube 地址和 Token
-4. 确保项目已在 SonarQube 中配置并分析过
-
-**SpotBugs（需要本地安装）：**
-1. 本地安装 SpotBugs（`brew install spotbugs` 或下载安装）
-2. 在 `application.yml` 中启用：`app.analysis.spotbugs.enabled: true`
-3. 配置可执行文件路径（如 `spotbugs` 或完整路径）
-4. 调整 effort 和 threshold 参数控制检测深度
-
-**注意：** 这两个工具默认禁用，不需要安装本地服务即可运行基础代码审查功能。
-
-## 📚 技术栈
-
-- **Java 17**
-- **Spring Boot 3.x**
-- **LangChain4j** - Agent 框架
-- **DeepSeek** - AI 代码审查（默认，国内访问，性价比高）
-- **Alibaba P3C** - 阿里巴巴 Java 开发规范（50+ 条规则）
-- **JavaParser** - 代码解析
-- **Maven** - 构建工具
-- **Docker** - 容器化部署
-
-### 阿里巴巴 P3C 规范
-
-项目已集成 **Alibaba P3C-PMD** 规则库，覆盖完整的阿里巴巴 Java 开发手册规范：
-
-| 规范类别 | 规则数量 | 说明 |
-|---------|---------|------|
-| 命名规范 | 8+ | 类名、方法名、变量名、包名等 |
-| 常量定义 | 3+ | 常量命名、魔法数字等 |
-| 代码格式 | 5+ | 大括号、行宽、缩进等 |
-| OOP 规约 | 10+ | 面向对象设计规范 |
-| 集合处理 | 8+ | List、Map、Set 使用规范 |
-| 并发处理 | 10+ | 线程池、锁、并发集合等 |
-| 控制语句 | 5+ | 条件、循环、异常处理等 |
-| 注释规约 | 3+ | 类注释、方法注释等 |
-| 其他 | 10+ | 日志、异常、日期等 |
-
-**P3C 规则自动启用**，无需额外配置。
-
-### 可选扩展工具
-
-- **SonarQube** - 企业级代码质量分析（需本地服务）
-- **SpotBugs** - 基于字节码的 Bug 检测（需本地安装）
-
-> 💡 **提示**：以上两个工具为可选集成，默认禁用。不安装它们不会影响核心代码审查功能的使用。
-
-### AI 模型支持
-
-项目默认使用 **DeepSeek** 进行代码审查，优势：
-- ✅ 国内直接访问，无需代理
-- ✅ 代码专项优化，审查质量高
-- ✅ 价格仅为 GPT-4 的 1/10
-
-如需切换 OpenAI，修改环境变量 `DEEPSEEK_BASE_URL` 和 `OPENAI_API_KEY` 即可。
-
-## 🤝 贡献指南
+## 贡献指南
 
 1. Fork 项目
 2. 创建分支：`git checkout -b feature/xxx`
-3. 提交更改：`git commit -m "Add xxx"`
+3. 提交更改：`git commit -m "feat: add xxx"`
 4. 推送分支：`git push origin feature/xxx`
 5. 创建 Pull Request
 
-## 📄 许可证
+## 许可证
 
 MIT License
 
-## 🙏 致谢
+## 致谢
 
-- [Spring AI](https://spring.io/projects/spring-ai)
 - [LangChain4j](https://github.com/langchain4j/langchain4j)
+- [Alibaba P3C](https://github.com/alibaba/p3c)
 - [JavaParser](https://github.com/javaparser/javaparser)
 
 ---
