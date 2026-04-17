@@ -1,0 +1,47 @@
+# ============================================
+# Java Code Review Agent Docker Compose 配置
+# ============================================
+
+version: '3.8'
+
+services:
+  # 代码审查 Agent 服务
+  code-review-agent:
+    build: .
+    image: java-code-review-agent:latest
+    container_name: code-review-agent
+    ports:
+      - "8080:8080"
+    environment:
+      # OpenAI 配置
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      
+      # GitLab 配置（公司内网）
+      - GITLAB_URL=${GITLAB_URL:-http://192.168.1.151}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      
+      # GitHub 配置
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      
+      # JVM 配置
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    
+    # 网络配置（如果需要访问公司内网）
+    networks:
+      - agent-network
+    
+    # 重启策略
+    restart: unless-stopped
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# 网络定义
+networks:
+  agent-network:
+    driver: bridge

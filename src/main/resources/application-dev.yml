@@ -1,0 +1,16 @@
+# ============================================
+# 开发环境配置
+# 优先级高于 application.yml
+# ============================================
+
+# 开发环境使用 .env 文件加载配置
+# 需要添加依赖: me.paulschwarz:spring-dotenv
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+# 日志级别
+logging:
+  level:
+    com.aicode.review: DEBUG

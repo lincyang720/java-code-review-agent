@@ -1,0 +1,97 @@
+# ============================================
+# Java Code Review Agent 配置文件
+# ============================================
+
+spring:
+  application:
+    name: code-review-agent
+
+  # 异步任务配置
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 10
+        queue-capacity: 100
+        keep-alive: 60s
+
+# LangChain4j 配置
+# 默认使用 DeepSeek API（国内访问，性价比高）
+# 如需切换 OpenAI，修改 DEEPSEEK_BASE_URL 和 DEEPSEEK_MODEL 环境变量
+langchain4j:
+  open-ai:
+    api-key: ${DEEPSEEK_API_KEY:${OPENAI_API_KEY:}}
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
+    model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+    temperature: 0.3
+    # 超时时间：代码审查需要较长时间，建议 60-180 秒
+    timeout: ${AI_TIMEOUT:PT120S}
+
+# 应用配置
+app:
+  # GitLab 配置（公司内网）
+  gitlab:
+    url: ${GITLAB_URL:http://192.168.1.151}
+    token: ${GITLAB_TOKEN:}
+
+  # GitHub 配置
+  github:
+    token: ${GITHUB_TOKEN:}
+
+  # 审查配置
+  review:
+    # 是否启用 AI 分析（本地规则检测始终启用）
+    enable-ai: true
+    # 本地规则发现问题超过此数量时跳过 AI 分析（节省成本）
+    local-issue-threshold: 10
+    # 最大代码长度（超过则截断）
+    max-code-length: 10000
+    # 是否发布评论到 PR/MR
+    post-comments: true
+
+  # 静态代码分析工具配置（多渠道检测，可选启用）
+  analysis:
+    # 本地规则检测（阿里巴巴规范、OWASP 安全规则）- 始终启用，零成本
+    local-rules-enabled: true
+    # AI 深度分析 - 默认启用
+    ai-analysis-enabled: true
+    
+    # SonarQube 配置（可选）
+    # 如需使用：1) 本地安装 SonarQube 服务 2) 启用 enabled: true 3) 配置 token
+    sonarqube:
+      enabled: false  # 默认禁用，无需安装本地服务
+      url: http://localhost:9000
+      token: ${SONAR_TOKEN:}
+      project-key: ${SONAR_PROJECT_KEY:}
+    
+    # SpotBugs 配置（可选）
+    # 如需使用：1) 本地安装 SpotBugs 2) 启用 enabled: true 3) 配置可执行路径
+    spotbugs:
+      enabled: false  # 默认禁用，无需安装本地工具
+      executable-path: spotbugs  # 可指定完整路径如 /usr/local/bin/spotbugs
+      effort: default  # 检测级别：min(快), default(平衡), max(全面)
+      threshold: medium  # 报告级别：high(仅严重), medium(中等), low(全部), experimental(实验性)
+
+# 服务器配置
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /
+
+# 日志配置
+logging:
+  level:
+    com.aicode.review: DEBUG
+    dev.langchain4j: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

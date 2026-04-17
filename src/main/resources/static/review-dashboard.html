@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码审查实时看板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title .icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-section {
+            display: none;
+        }
+
+        .progress-section.active {
+            display: block;
+        }
+
+        .progress-bar-container {
+            background: #f0f0f0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+            color: #d4d4d4;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry .timestamp {
+            color: #858585;
+            margin-right: 10px;
+        }
+
+        .log-entry .type-progress {
+            color: #4fc1ff;
+        }
+
+        .log-entry .type-complete {
+            color: #4ec9b0;
+        }
+
+        .log-entry .type-error {
+            color: #f44747;
+        }
+
+        .log-entry .type-log {
+            color: #d4d4d4;
+        }
+
+        .result-section {
+            display: none;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        .issue-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .issue-stat {
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .issue-stat.critical {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+        }
+
+        .issue-stat.warning {
+            background: linear-gradient(135deg, #feca57 0%, #ff9f43 100%);
+        }
+
+        .issue-stat.info {
+            background: linear-gradient(135deg, #48dbfb 0%, #0abde3 100%);
+        }
+
+        .issue-stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .issue-stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn-export {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .btn-export.html {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-color: #1976d2;
+        }
+
+        .btn-export.json {
+            background: #f3e5f5;
+            color: #7b1fa2;
+            border-color: #7b1fa2;
+        }
+
+        .btn-export.pdf {
+            background: #ffebee;
+            color: #c62828;
+            border-color: #c62828;
+        }
+
+        .btn-export.markdown {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-color: #2e7d32;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-view-report {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 15px;
+            text-decoration: none;
+        }
+
+        .btn-view-report:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .connection-status.connected {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .connection-status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .issue-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 代码审查实时看板</h1>
+            <p>实时监控代码审查进度，多格式导出审查报告</p>
+        </div>
+
+        <!-- 配置卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <div class="icon">⚙️</div>
+                审查配置
+                <span id="connectionStatus" class="connection-status disconnected">
+                    <span class="dot"></span>
+                    未连接
+                </span>
+            </div>
+            <div class="form-group">
+                <label>GitLab 项目 ID</label>
+                <input type="text" id="projectId" placeholder="例如: 37" value="37">
+            </div>
+            <div class="form-group">
+                <label>分支名称</label>
+                <input type="text" id="branch" placeholder="例如: main" value="main">
+            </div>
+            <button class="btn btn-primary" id="startBtn" onclick="startReview()">
+                <span>🚀</span>
+                开始审查
+            </button>
+        </div>
+
+        <!-- 进度卡片 -->
+        <div class="card progress-section" id="progressSection">
+            <div class="card-title">
+                <div class="icon">📊</div>
+                审查进度
+            </div>
+            
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+            </div>
+
+            <div class="progress-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="currentFile">0</div>
+                    <div class="stat-label">当前文件</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFiles">0</div>
+                    <div class="stat-label">总文件数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="processedFiles">0</div>
+                    <div class="stat-label">已完成</div>
+                </div>
+            </div>
+
+            <div class="log-container" id="logContainer">
+                <!-- 日志条目将在这里动态添加 -->
+            </div>
+        </div>
+
+        <!-- 结果卡片 -->
+        <div class="card result-section" id="resultSection">
+            <div class="card-title">
+                <div class="icon">📋</div>
+                审查结果
+            </div>
+
+            <div class="issue-stats">
+                <div class="issue-stat critical">
+                    <div class="issue-stat-value" id="criticalCount">0</div>
+                    <div class="issue-stat-label">严重问题</div>
+                </div>
+                <div class="issue-stat warning">
+                    <div class="issue-stat-value" id="warningCount">0</div>
+                    <div class="issue-stat-label">警告</div>
+                </div>
+                <div class="issue-stat info">
+                    <div class="issue-stat-value" id="infoCount">0</div>
+                    <div class="issue-stat-label">建议</div>
+                </div>
+            </div>
+
+            <div class="export-buttons">
+                <button class="btn-export html" onclick="exportReport('html')">
+                    📄 导出 HTML
+                </button>
+                <button class="btn-export json" onclick="exportReport('json')">
+                    📦 导出 JSON
+                </button>
+                <button class="btn-export pdf" onclick="exportReport('pdf')">
+                    📑 导出 PDF
+                </button>
+                <button class="btn-export markdown" onclick="exportReport('markdown')">
+                    📝 导出 Markdown
+                </button>
+            </div>
+            
+            <a id="viewReportLink" class="btn-view-report" href="#" target="_blank" style="display: none;">
+                🔍 查看完整报告
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentTaskId = null;
+        let currentReport = null;
+        const API_BASE = window.location.origin;
+
+        // 连接 WebSocket
+        function connectWebSocket() {
+            // 使用与 API 相同的地址，避免端口不一致问题
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsHost = window.location.host;
+            const wsUrl = `${wsProtocol}//${wsHost}/ws/review-progress`;
+            console.log('连接 WebSocket:', wsUrl);
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('WebSocket 连接成功');
+                updateConnectionStatus(true);
+            };
+
+            ws.onmessage = function(event) {
+                console.log('收到原始消息:', event.data);
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log('解析后消息:', message);
+                    handleMessage(message);
+                } catch (e) {
+                    console.error('消息解析失败:', e);
+                    addLogEntry('消息解析失败: ' + e.message, 'error');
+                }
+            };
+
+            ws.onclose = function() {
+                console.log('WebSocket 连接关闭');
+                updateConnectionStatus(false);
+                // 3秒后重连
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket 错误:', error);
+                updateConnectionStatus(false);
+            };
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                statusEl.innerHTML = '<span class="dot"></span>已连接';
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                statusEl.innerHTML = '<span class="dot"></span>未连接';
+            }
+        }
+
+        // 存储启动审查的参数，等待订阅成功后调用
+        let pendingReviewRequest = null;
+
+        // 处理 WebSocket 消息
+        function handleMessage(message) {
+            console.log('处理消息:', message);
+            
+            // 确保 message.type 存在
+            if (!message.type) {
+                console.warn('消息没有 type 字段:', message);
+                addLogEntry('收到未知格式消息', 'log');
+                return;
+            }
+
+            switch (message.type) {
+                case 'CONNECTED':
+                    console.log('WebSocket 连接成功，sessionId:', message.data);
+                    addLogEntry('WebSocket 连接成功', 'log');
+                    // 连接成功，如果有当前任务则订阅
+                    if (currentTaskId) {
+                        ws.send(JSON.stringify({ taskId: currentTaskId }));
+                        addLogEntry('自动订阅任务: ' + currentTaskId, 'log');
+                    }
+                    break;
+
+                case 'SUBSCRIBED':
+                    console.log('任务订阅成功:', message.taskId);
+                    addLogEntry('任务订阅成功: ' + message.taskId, 'log');
+                    // 订阅成功后，延迟 500ms 再启动审查，确保后端订阅完成
+                    if (pendingReviewRequest && pendingReviewRequest.taskId === message.taskId) {
+                        const { projectId, branch, taskId } = pendingReviewRequest;
+                        pendingReviewRequest = null;
+                        setTimeout(() => {
+                            doStartReview(projectId, branch, taskId);
+                        }, 500);
+                    }
+                    break;
+
+                case 'STARTED':
+                    showProgressSection();
+                    updateProgress(message);
+                    addLogEntry('开始审查: ' + (message.message || ''), 'log');
+                    break;
+
+                case 'PROGRESS':
+                    updateProgress(message);
+                    addLogEntry('正在审查: ' + (message.filePath || ''), 'progress');
+                    break;
+
+                case 'FILE_COMPLETE':
+                    updateProgress(message);
+                    const issueText = message.issueCount > 0 ? `发现 ${message.issueCount} 个问题` : '未发现问题';
+                    addLogEntry(`[${message.current}/${message.total}] ${message.filePath || ''} - ${issueText}`, 'complete');
+                    break;
+
+                case 'COMPLETED':
+                    updateProgress(message);
+                    currentReport = message.data;
+                    showResultSection();
+                    updateResultStats(currentReport);
+                    // 更新查看报告链接
+                    if (currentReport && currentReport.taskId) {
+                        updateViewReportLink(currentReport.taskId);
+                    }
+                    addLogEntry('✅ ' + (message.message || '审查完成'), 'complete');
+                    document.getElementById('startBtn').disabled = false;
+                    break;
+
+                case 'ERROR':
+                    addLogEntry('❌ ' + (message.message || '未知错误'), 'error');
+                    document.getElementById('startBtn').disabled = false;
+                    break;
+
+                case 'LOG':
+                    addLogEntry(message.message || '', 'log');
+                    break;
+                    
+                default:
+                    console.warn('未知消息类型:', message.type, message);
+                    addLogEntry('收到未知类型消息: ' + message.type, 'log');
+            }
+        }
+
+        // 开始审查 - 先订阅，收到确认后再启动
+        async function startReview() {
+            const projectId = document.getElementById('projectId').value.trim();
+            const branch = document.getElementById('branch').value.trim();
+
+            if (!projectId || !branch) {
+                alert('请填写项目ID和分支名称');
+                return;
+            }
+
+            // 重置状态
+            currentTaskId = 'task-' + Date.now();
+            currentReport = null;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('logContainer').innerHTML = '';
+            document.getElementById('resultSection').classList.remove('active');
+            
+            // 立即显示进度区域，让用户看到日志
+            showProgressSection();
+            addLogEntry('正在连接 WebSocket 并订阅任务...', 'log');
+
+            // 存储请求参数，等待订阅成功后启动
+            pendingReviewRequest = { projectId, branch, taskId: currentTaskId };
+            
+            // 订阅任务（WebSocket 应该已连接）
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ taskId: currentTaskId }));
+                addLogEntry('已发送订阅请求: ' + currentTaskId, 'log');
+            } else {
+                addLogEntry('❌ WebSocket 未连接，请刷新页面重试', 'error');
+                document.getElementById('startBtn').disabled = false;
+                pendingReviewRequest = null;
+            }
+        }
+        
+        // 实际启动审查的函数（在订阅成功后调用）
+        async function doStartReview(projectId, branch, taskId) {
+            addLogEntry('订阅成功，正在启动审查...', 'log');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/review/branch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        projectId: projectId,
+                        branch: branch,
+                        taskId: taskId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('启动审查失败: ' + response.statusText);
+                }
+                
+                addLogEntry('审查任务已启动', 'log');
+            } catch (error) {
+                addLogEntry('❌ 启动失败: ' + error.message, 'error');
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+
+        // 显示进度区域
+        function showProgressSection() {
+            document.getElementById('progressSection').classList.add('active');
+        }
+
+        // 显示结果区域
+        function showResultSection() {
+            document.getElementById('resultSection').classList.add('active');
+        }
+
+        // 更新查看报告链接
+        function updateViewReportLink(reportId) {
+            const link = document.getElementById('viewReportLink');
+            if (reportId) {
+                link.href = `${API_BASE}/api/reports/${reportId}/view`;
+                link.style.display = 'inline-flex';
+            } else {
+                link.style.display = 'none';
+            }
+        }
+
+        // 更新进度
+        function updateProgress(message) {
+            if (message.total) {
+                document.getElementById('totalFiles').textContent = message.total;
+            }
+            if (message.current) {
+                document.getElementById('currentFile').textContent = message.current;
+                document.getElementById('processedFiles').textContent = message.current;
+            }
+            if (message.progress !== undefined) {
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = message.progress + '%';
+                progressBar.textContent = message.progress + '%';
+            }
+        }
+
+        // 更新结果统计
+        function updateResultStats(report) {
+            document.getElementById('criticalCount').textContent = report.criticalCount || 0;
+            document.getElementById('warningCount').textContent = report.warningCount || 0;
+            document.getElementById('infoCount').textContent = report.infoCount || 0;
+        }
+
+        // 添加日志条目
+        function addLogEntry(message, type) {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const typeClass = 'type-' + type;
+            
+            entry.innerHTML = `
+                <span class="timestamp">[${timestamp}]</span>
+                <span class="${typeClass}">${escapeHtml(message)}</span>
+            `;
+            
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 导出报告
+        async function exportReport(format) {
+            if (!currentReport) {
+                alert('暂无审查报告可导出');
+                return;
+            }
+
+            const reportId = currentReport.taskId || currentReport.reportId;
+            if (!reportId) {
+                alert('报告ID缺失，无法导出');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/reports/${reportId}/export?format=${format}`);
+                
+                if (!response.ok) {
+                    throw new Error('导出失败: ' + response.statusText);
+                }
+
+                // 获取文件名
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `review-report.${format}`;
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (match) filename = match[1];
+                }
+
+                // 下载文件
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+            } catch (error) {
+                alert('导出失败: ' + error.message);
+            }
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载时连接 WebSocket
+        document.addEventListener('DOMContentLoaded', function() {
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>
